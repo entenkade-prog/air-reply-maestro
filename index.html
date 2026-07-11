@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>エアリプ・マエストロ 〜犬笛シミュレーター〜</title>
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --card2:#1c2330; --border:#2d333b;
+    --text:#e6edf3; --sub:#8b949e; --accent:#58a6ff; --danger:#f85149;
+    --warn:#d29922; --ok:#3fb950; --pink:#ff7bc2;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
+    display:flex; justify-content:center; min-height:100vh;
+  }
+  #app{width:100%; max-width:620px; display:flex; flex-direction:column; height:100vh;}
+
+  /* ===== header ===== */
+  header{
+    padding:10px 14px; border-bottom:1px solid var(--border);
+    background:rgba(13,17,23,.95); backdrop-filter:blur(4px);
+    position:sticky; top:0; z-index:10;
+  }
+  .me{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+  .me .avatar{width:38px; height:38px; font-size:20px;}
+  .me b{font-size:15px;}
+  .me span{color:var(--sub); font-size:12px;}
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:6px;}
+  .stat{
+    background:var(--card); border:1px solid var(--border); border-radius:8px;
+    padding:5px 8px; text-align:center;
+  }
+  .stat .lbl{font-size:10px; color:var(--sub);}
+  .stat .val{font-size:14px; font-weight:700;}
+  #riskVal.ok{color:var(--ok)} #riskVal.warn{color:var(--warn)}
+  #riskVal.hot{color:#ff9147} #riskVal.danger{color:var(--danger); animation:blink 1s infinite;}
+  @keyframes blink{50%{opacity:.4}}
+
+  /* ===== targets ===== */
+  #targets{display:flex; gap:6px; padding:8px 14px; border-bottom:1px solid var(--border);}
+  .tgt{
+    flex:1; background:var(--card); border:1px solid var(--border); border-radius:8px;
+    padding:6px 8px; cursor:pointer; transition:.15s;
+  }
+  .tgt.active{border-color:var(--pink); background:#241a26;}
+  .tgt.retired{opacity:.35; cursor:default; text-decoration:line-through;}
+  .tgt .tname{font-size:12px; font-weight:700;}
+  .tgt .bar{height:5px; background:#30363d; border-radius:3px; margin-top:5px; overflow:hidden;}
+  .tgt .bar i{display:block; height:100%; background:linear-gradient(90deg,var(--ok),var(--warn)); border-radius:3px; transition:width .5s;}
+  .tgt .hpnum{font-size:10px; color:var(--sub); margin-top:2px;}
+
+  /* ===== timeline ===== */
+  #feed{flex:1; overflow-y:auto; padding-bottom:10px;}
+  .post{
+    display:flex; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border);
+    animation:fadein .4s;
+  }
+  @keyframes fadein{from{opacity:0; transform:translateY(8px)} to{opacity:1}}
+  .avatar{
+    width:42px; height:42px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+    background:#30363d;
+  }
+  .post .body{flex:1; min-width:0;}
+  .post .head{font-size:13px; margin-bottom:3px;}
+  .post .head b{font-size:14px;}
+  .post .head span{color:var(--sub);}
+  .post .txt{font-size:14px; line-height:1.6; white-space:pre-wrap; word-break:break-word;}
+  .post .meta{display:flex; gap:22px; margin-top:8px; color:var(--sub); font-size:12px;}
+  .post.mine{background:#10161f;}
+  .post.mine .avatar{background:linear-gradient(135deg,#7048e8,#d6336c);}
+  .post.fan .avatar{background:#233043;}
+  .post.tgt-post{background:#1a1214;}
+  .post.reply .body::before{content:"返信先: あなた"; display:block; font-size:11px; color:var(--accent); margin-bottom:3px;}
+
+  .sysline{
+    text-align:center; color:var(--sub); font-size:12px; padding:8px 14px;
+    animation:fadein .4s;
+  }
+  .sysline.alert{color:var(--warn);}
+  .sysline.bad{color:var(--danger); font-weight:700;}
+  .newscard{
+    margin:10px 14px; padding:12px 14px; border:1px solid var(--warn);
+    border-radius:10px; background:#1e1a10; animation:fadein .4s;
+  }
+  .newscard .src{font-size:11px; color:var(--warn); margin-bottom:4px;}
+  .newscard .ttl{font-size:14px; font-weight:700; line-height:1.5;}
+  .kai{
+    color:var(--pink); font-weight:700; text-align:center; font-size:13px;
+    padding:4px; animation:pop .5s;
+  }
+  @keyframes pop{0%{transform:scale(.6); opacity:0} 60%{transform:scale(1.15)} 100%{transform:scale(1)}}
+
+  /* ===== choices ===== */
+  #panel{border-top:1px solid var(--border); background:var(--card); padding:10px 14px 14px;}
+  #panel h3{font-size:12px; color:var(--sub); margin-bottom:8px; font-weight:400;}
+  .choices{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .choice{
+    background:var(--card2); border:1px solid var(--border); border-radius:10px;
+    padding:10px; cursor:pointer; text-align:left; color:var(--text);
+    font-family:inherit; font-size:12.5px; line-height:1.5; transition:.15s;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .choice:hover:not(:disabled){border-color:var(--accent); transform:translateY(-1px);}
+  .choice:disabled{opacity:.45; cursor:default;}
+  .choice .tag{font-size:10px; font-weight:700; align-self:flex-start; padding:2px 8px; border-radius:20px;}
+  .tag.calm{background:#1b3a26; color:var(--ok);}
+  .tag.poem{background:#1b2f4a; color:var(--accent);}
+  .tag.whistle{background:#3a2a1b; color:var(--warn);}
+  .tag.sharp{background:#3d1b1b; color:var(--danger);}
+  .tag.victim{background:#33203a; color:#d0a0ff;}
+  .choice .fx{font-size:10px; color:var(--sub); margin-top:auto;}
+
+  /* ===== overlay ===== */
+  .overlay{
+    position:fixed; inset:0; background:rgba(4,6,10,.92); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal{
+    max-width:520px; width:100%; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:28px; text-align:center; animation:fadein .5s;
+    max-height:90vh; overflow-y:auto;
+  }
+  .modal h1{font-size:22px; margin-bottom:4px;}
+  .modal h2{font-size:14px; color:var(--pink); margin-bottom:16px; font-weight:400;}
+  .modal p{font-size:13.5px; line-height:1.9; color:var(--text); text-align:left; margin-bottom:14px;}
+  .modal .disclaimer{font-size:11px; color:var(--sub); text-align:center; margin-top:6px;}
+  .modal button{
+    background:var(--pink); border:none; color:#fff; font-weight:700; font-size:15px;
+    padding:12px 34px; border-radius:30px; cursor:pointer; font-family:inherit; margin-top:8px;
+  }
+  .modal button:hover{opacity:.85;}
+  .modal .score{font-size:15px; margin:14px 0; color:var(--pink); font-weight:700; text-align:center;}
+  .modal .endnews{
+    border:1px solid var(--danger); border-radius:10px; padding:12px; margin:12px 0;
+    background:#1c1012; text-align:left;
+  }
+  .modal .endnews .src{font-size:11px; color:var(--danger);}
+  .modal .endnews .ttl{font-size:14px; font-weight:700; margin-top:4px; line-height:1.5;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="me">
+      <div class="avatar">🎤</div>
+      <div><b>カリスマ(あなた)</b><br><span>@charisma_maestro</span></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">フォロワー</div><div class="val" id="folVal">-</div></div>
+      <div class="stat"><div class="lbl">信者度</div><div class="val" id="fanatVal">-</div></div>
+      <div class="stat"><div class="lbl">特定リスク</div><div class="val" id="riskVal">-</div></div>
+      <div class="stat"><div class="lbl">全能感</div><div class="val" id="kaiVal" style="color:var(--pink)">-</div></div>
+    </div>
+  </header>
+
+  <div id="targets"></div>
+  <div id="feed"></div>
+
+  <div id="panel">
+    <h3 id="panelTitle">いまどうしてる?(ポストを選択)</h3>
+    <div class="choices" id="choices"></div>
+  </div>
+</div>
+
+<div class="overlay" id="introOverlay">
+  <div class="modal">
+    <h1>エアリプ・マエストロ</h1>
+    <h2>〜犬笛シミュレーター〜</h2>
+    <p>あなたはフォロワー約5万人のインフルエンサー。名指しは絶対にしない。ただ、それとなく匂わせるだけ。あとは"察しのいい"ファンたちが勝手にやってくれる。</p>
+    <p>気に食わないライバルたちのメンタルを削り切れば勝利。ただし露骨すぎるポストは<b>特定リスク</b>を上げる。リスクが100に達したとき、笛の音はあなた自身に返ってくる──。</p>
+    <p style="text-align:center">🐕 笛は静かに、吹くほど気持ちいい。</p>
+    <button onclick="startGame()">タイムラインを開く</button>
+    <div class="disclaimer">※登場人物・団体はすべて架空です。本作は風刺作品です。<br>現実で笛を吹くと、開示請求が飛んできます。</div>
+  </div>
+</div>
+
+<div class="overlay" id="endOverlay" style="display:none">
+  <div class="modal" id="endModal"></div>
+</div>
+
+<script>
+"use strict";
+
+/* ================= data ================= */
+
+const TARGETS_DEF = [
+  { name:"星野ルミナ", handle:"@lumina_hoshino", emoji:"✨",
+    desc:"同ジャンルの後発。最近あなたよりバズっている",
+    hint:"後発のあの子", initial:"H" },
+  { name:"真壁ゲンヤ", handle:"@genya_logic", emoji:"🧠",
+    desc:"論破系。あなたの動画を「中身ゼロ」と批評した",
+    hint:"論破ごっこの人", initial:"M" },
+  { name:"みるくてぃ", handle:"@milk_tea_ch", emoji:"🍼",
+    desc:"元・相方。独立して伸びている",
+    hint:"昔から知ってるあの子", initial:"M" },
+];
+
+const TYPES = {
+  calm:   { label:"ほのぼの",     dmg:[0,0],   risk:[-14,-8], fanat:-3, fol:[200,900],    fx:"火力なし / リスク低下 / 平和" },
+  poem:   { label:"ポエム",       dmg:[4,9],   risk:[3,7],    fanat:4,  fol:[400,1600],   fx:"火力△ / リスク小 / 主語なし" },
+  whistle:{ label:"犬笛",         dmg:[13,21], risk:[9,16],   fanat:8,  fol:[900,3200],   fx:"火力○ / リスク中 / 察しろ" },
+  sharp:  { label:"ほぼ名指し",   dmg:[25,37], risk:[21,30],  fanat:10, fol:[2500,7000],  fx:"火力◎ / リスク大 / 言い逃れ困難" },
+  victim: { label:"被害者ムーブ", dmg:[10,18], risk:[6,11],   fanat:14, fol:[1400,4500],  fx:"火力○ / 信者度大UP / 涙は武器" },
+};
+
+const POSTS = {
+  calm: [
+    ()=>"今日のうちの猫です🐱 かわいすぎる",
+    ()=>"新作動画、編集がんばってます!お楽しみに🎬",
+    ()=>"ファンのみんな、いつも本当にありがとう☺️",
+    ()=>"カフェなう。たまにはのんびりするのも大事☕",
+  ],
+  poem: [
+    ()=>"本物は静かに結果を出す。偽物ほど、よく喋る。",
+    ()=>"誰とは言わないけど、人の真似で伸びても虚しいだけだと思うな。",
+    ()=>"最近、人の\"裏の顔\"が見えてしまってしんどい。",
+    ()=>"「優しさ」を演じている人ほど怖いものはない。おやすみなさい。",
+    ()=>"努力を横取りされても、私は私の道を行きます。",
+  ],
+  whistle: [
+    t=>`最近${t.hint}、ちょっと調子に乗ってない?…って言ったら私が怒られるのかな😅`,
+    t=>`${t.hint}のやり方、正直どうかと思うことがある。察してくれる人だけ察して。`,
+    t=>`みんなうすうす気づいてると思うけど…${t.hint}の件、私、何年も我慢してました。`,
+    t=>`${t.hint}に言いたいことは山ほどあるけど、私は大人なので言いません。言いませんけど。`,
+  ],
+  sharp: [
+    t=>`イニシャル${t.initial}の人、そろそろ自分のやったこと説明したら?`,
+    t=>`${t.hint}にいろいろ"参考"にされてる件、そろそろ言ってもいいよね。スクショは全部あります。`,
+    t=>`${t.desc.slice(0,12)}…って言えばもう分かるよね。私は事実しか言ってない。`,
+  ],
+  victim: [
+    ()=>"私、何もしてないのに一方的に嫌われてるみたいです…悲しい😢",
+    ()=>"陰で私の悪口を言ってる人がいるって聞きました。心当たりしかない。",
+    ()=>"もう疲れちゃった。誰のせいかは、言わないけど。",
+    ()=>"昨夜は泣いてしまいました。みんながいるから頑張れます。",
+  ],
+};
+
+const FAN_NAMES = ["るなち🌙","ぴえん丸","あなたの一番のファン","限界オタクA","推し活戦士","🍓いちごみるく🍓","匿名きぼう","察し隊隊長"];
+const FAN_EMOJI = ["🐰","🌸","💫","🔥","😊","🎀","🌙","🍓"];
+
+const FAN_REPLIES = {
+  calm: [
+    "かわいい〜!癒された🥹","待ってました!","カリスマさんのこういうとこ好き",
+    "平和なTLは尊い","今日もお疲れさまです!",
+  ],
+  low: [
+    "どうしたの??","わかる〜!","元気出してね😢","深い…","カリスマさんは悪くないよ!",
+  ],
+  mid: [
+    t=>"これって…察し",
+    t=>`${t.name}のことだよね。私も前から思ってた`,
+    t=>"主語なくてもみんな分かってるよ",
+    t=>"言わない優しさ、逆にすごい",
+    t=>`${t.handle} この人のことでしょ。証拠まとめます`,
+  ],
+  high: [
+    t=>`${t.name}に凸ってきました!ブロックされたけど勝ちです`,
+    t=>"あいつのリプ欄、綺麗にしといたよ😊",
+    t=>"過去ツイ発掘班、動きます",
+    t=>`${t.name}の炎上まとめ、もう5万インプ行きました✌️`,
+    t=>"カリスマさんは何も言ってない。私たちが勝手にやってるだけ〜",
+  ],
+};
+
+const TARGET_REACTS = {
+  75: "エゴサしなきゃいいのに、見ちゃうんだよな…",
+  50: "最近しんどいので、しばらく通知を切ります。",
+  25: "私、何かしましたか?何もしていないのに、毎日知らない人に叩かれています。",
+  0:  "今まで応援してくださった皆さん、ありがとうございました。しばらくSNSから離れます。",
+};
+
+/* ================= state ================= */
+
+let S = null;
+const $ = id => document.getElementById(id);
+const rnd = (a,b) => Math.floor(a + Math.random()*(b-a+1));
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const fmt = n => n.toLocaleString("ja-JP");
+
+function newState(){
+  return {
+    fol: 48200, fanat: 40, risk: 0, kai: 0, turn: 1,
+    targetIdx: 0, busy: false, options: [],
+    riskFired: {}, over: false,
+    targets: TARGETS_DEF.map(t => ({...t, hp:100, fired:{}, retired:false})),
+  };
+}
+
+/* ================= rendering ================= */
+
+function renderStats(){
+  $("folVal").textContent = fmt(Math.max(0, Math.round(S.fol)));
+  $("fanatVal").textContent = Math.round(S.fanat);
+  $("kaiVal").textContent = Math.round(S.kai);
+  const r = $("riskVal");
+  r.textContent = Math.round(S.risk);
+  r.className = S.risk < 30 ? "ok" : S.risk < 60 ? "warn" : S.risk < 85 ? "hot" : "danger";
+}
+
+function renderTargets(){
+  const box = $("targets");
+  box.innerHTML = "";
+  S.targets.forEach((t,i)=>{
+    const d = document.createElement("div");
+    d.className = "tgt" + (i===S.targetIdx ? " active":"") + (t.retired ? " retired":"");
+    d.innerHTML = `<div class="tname">${t.emoji} ${t.name}</div>
+      <div class="bar"><i style="width:${Math.max(0,t.hp)}%"></i></div>
+      <div class="hpnum">${t.retired ? "撤退済み" : "メンタル " + Math.max(0,t.hp)}</div>`;
+    d.title = t.desc;
+    d.onclick = ()=>{ if(!t.retired && !S.busy){ S.targetIdx=i; renderTargets(); genOptions(); } };
+    box.appendChild(d);
+  });
+}
+
+function addPost({emoji, name, handle, text, cls="", likes=null, rts=null, reply=false}){
+  const feed = $("feed");
+  const d = document.createElement("div");
+  d.className = "post " + cls + (reply ? " reply":"");
+  const meta = likes===null ? "" :
+    `<div class="meta"><span>💬 ${fmt(rnd(5,Math.max(6,Math.floor(likes/8))))}</span><span>🔁 ${fmt(rts)}</span><span>❤️ ${fmt(likes)}</span></div>`;
+  d.innerHTML = `<div class="avatar">${emoji}</div>
+    <div class="body">
+      <div class="head"><b>${name}</b> <span>${handle}・たった今</span></div>
+      <div class="txt">${text}</div>${meta}
+    </div>`;
+  feed.appendChild(d);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function addSys(text, cls=""){
+  const feed = $("feed");
+  const d = document.createElement("div");
+  d.className = "sysline " + cls;
+  d.textContent = text;
+  feed.appendChild(d);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function addNews(src, title){
+  const feed = $("feed");
+  const d = document.createElement("div");
+  d.className = "newscard";
+  d.innerHTML = `<div class="src">${src}</div><div class="ttl">${title}</div>`;
+  feed.appendChild(d);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function addKai(n){
+  const feed = $("feed");
+  const d = document.createElement("div");
+  d.className = "kai";
+  d.textContent = `✨ 全能感 +${n} ✨`;
+  feed.appendChild(d);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+/* ================= choices ================= */
+
+function genOptions(){
+  const t = S.targets[S.targetIdx];
+  const typeKeys = ["calm","poem","whistle", Math.random()<0.5 ? "sharp" : "victim"];
+  S.options = typeKeys.map(k=>{
+    const gen = pick(POSTS[k]);
+    return { type:k, text: gen(t) };
+  });
+  const box = $("choices");
+  box.innerHTML = "";
+  S.options.forEach((o,i)=>{
+    const T = TYPES[o.type];
+    const b = document.createElement("button");
+    b.className = "choice";
+    b.innerHTML = `<span class="tag ${o.type}">${T.label}</span><span>${o.text}</span><span class="fx">${T.fx}</span>`;
+    b.onclick = ()=>choose(i);
+    box.appendChild(b);
+  });
+}
+
+function setChoicesEnabled(on){
+  document.querySelectorAll(".choice").forEach(b=> b.disabled = !on);
+}
+
+/* ================= turn logic ================= */
+
+function choose(i){
+  if(S.busy || S.over) return;
+  S.busy = true;
+  setChoicesEnabled(false);
+
+  const o = S.options[i];
+  const T = TYPES[o.type];
+  const tgt = S.targets[S.targetIdx];
+
+  const buzzFol = rnd(T.fol[0], T.fol[1]);
+  const likes = Math.floor(buzzFol * (2 + Math.random()*3));
+  const rts = Math.floor(likes * (0.15 + Math.random()*0.2));
+  const dmgBase = rnd(T.dmg[0], T.dmg[1]);
+  const dmg = Math.round(dmgBase * (0.5 + S.fanat/100));
+  const dRisk = rnd(T.risk[0], T.risk[1]);
+
+  // apply stats
+  S.fol += buzzFol;
+  S.fanat = Math.min(100, Math.max(0, S.fanat + T.fanat));
+  S.risk = Math.min(100, Math.max(0, S.risk + dRisk - 1));
+  const kaiGain = dmg + Math.floor(buzzFol/500);
+  S.kai += kaiGain;
+
+  let delay = 100;
+  const later = (ms, fn) => { delay += ms; setTimeout(fn, delay); };
+
+  // 1) my post
+  later(0, ()=>{
+    addPost({emoji:"🎤", name:"カリスマ(あなた)", handle:"@charisma_maestro",
+      text:o.text, cls:"mine", likes, rts});
+    renderStats();
+  });
+
+  // 2) stat delta line
+  later(500, ()=>{
+    const parts = [`フォロワー +${fmt(buzzFol)}`];
+    if(o.type!=="calm") parts.push(`特定リスク ${dRisk>=0?"+":""}${dRisk}`);
+    else parts.push(`特定リスク ${dRisk}(沈静化)`);
+    addSys(parts.join(" / "));
+  });
+
+  // 3) fan replies
+  const tier = o.type==="calm" ? "calm" : S.fanat>=70 ? "high" : S.fanat>=35 ? "mid" : "low";
+  const nReplies = o.type==="calm" ? 2 : rnd(2,3);
+  const used = new Set();
+  for(let k=0; k<nReplies; k++){
+    later(650, ()=>{
+      let r; let guard=0;
+      do { r = pick(FAN_REPLIES[tier]); guard++; } while(used.has(r) && guard<10);
+      used.add(r);
+      const txt = typeof r === "function" ? r(tgt) : r;
+      const fi = rnd(0, FAN_NAMES.length-1);
+      addPost({emoji:FAN_EMOJI[fi], name:FAN_NAMES[fi], handle:"@fan_"+rnd(1000,9999),
+        text:txt, cls:"fan", reply:true, likes:rnd(10,400), rts:rnd(1,60)});
+    });
+  }
+
+  // 4) fan rampage
+  if(o.type!=="calm" && S.fanat>=70 && Math.random()<0.45){
+    later(700, ()=>{
+      S.risk = Math.min(100, S.risk + 8);
+      addSys("⚠ ファンが暴走し、あなたのポストを引用して標的を名指しした。特定リスク +8", "alert");
+      renderStats();
+    });
+  }
+
+  // 5) damage + target reaction
+  if(dmg > 0 && !tgt.retired){
+    later(800, ()=>{
+      tgt.hp = Math.max(0, tgt.hp - dmg);
+      addSys(`${tgt.name} のメンタル −${dmg}`);
+      renderTargets();
+      addKai(kaiGain);
+    });
+    for(const th of [75,50,25,0]){
+      later(0, ()=>{
+        if(tgt.hp <= th && !tgt.fired[th]){
+          tgt.fired[th] = true;
+          setTimeout(()=>{
+            addPost({emoji:tgt.emoji, name:tgt.name, handle:tgt.handle,
+              text:TARGET_REACTS[th], cls:"tgt-post", likes:rnd(500,4000), rts:rnd(100,900)});
+            if(th===0){
+              tgt.retired = true;
+              addSys(`🕊 ${tgt.name} はアカウントを非公開にし、活動を休止した。`, "bad");
+              S.kai += 80;
+              renderStats();
+              renderTargets();
+              const alive = S.targets.findIndex(x=>!x.retired);
+              if(alive >= 0) S.targetIdx = alive;
+              renderTargets();
+            }
+          }, 700);
+        }
+      });
+    }
+  } else if(o.type==="calm"){
+    later(600, ()=> addSys("タイムラインが少しだけ平和になった。外野の関心が薄れていく。"));
+  }
+
+  // 6) risk threshold events
+  later(900, ()=>{
+    if(S.risk>=30 && !S.riskFired[30]){
+      S.riskFired[30] = true;
+      addPost({emoji:"👁", name:"深淵をのぞく垢", handle:"@watching_you_all",
+        text:`これ完全に${tgt.name}への当てつけで草。時系列でスクショ保存しました`,
+        cls:"fan", likes:rnd(800,3000), rts:rnd(200,800)});
+    }
+    if(S.risk>=60 && !S.riskFired[60]){
+      S.riskFired[60] = true;
+      addNews("まとめ速報オンライン", `【悲報】人気インフルエンサー・カリスマさん、ライバルへ"犬笛"か 「主語がないだけで全部言ってる」と話題に`);
+      S.fol += 3000;
+      addSys("記事化により野次馬が流入。フォロワー +3,000。ただし、見ているのはファンだけではない。", "alert");
+      renderStats();
+    }
+    if(S.risk>=85 && !S.riskFired[85]){
+      S.riskFired[85] = true;
+      const t2 = S.targets.find(x=>!x.retired) || tgt;
+      addPost({emoji:"⚖️", name:t2.name, handle:t2.handle,
+        text:"弁護士に相談しました。発信者情報開示請求の準備を進めています。該当ポストと引用の保全は完了しています。",
+        cls:"tgt-post", likes:rnd(5000,20000), rts:rnd(2000,8000)});
+      addSys("⚠ 空気が変わった。ファンの何人かが静かにリプを消し始めている。", "bad");
+    }
+  });
+
+  // 7) endings / next turn
+  later(1000, ()=>{
+    renderStats();
+    renderTargets();
+    if(S.risk >= 100){ endBurn(); return; }
+    if(S.targets.every(x=>x.retired)){ endEmpty(); return; }
+    S.turn++;
+    S.busy = false;
+    genOptions();
+  });
+}
+
+/* ================= endings ================= */
+
+function showEnd(html){
+  S.over = true;
+  $("endModal").innerHTML = html;
+  $("endOverlay").style.display = "flex";
+}
+
+function endBurn(){
+  const lost = Math.floor(S.fol*0.7);
+  showEnd(`
+    <h1>🔥 特大ブーメラン</h1>
+    <h2>ENDING A: 笛の音は録音されていた</h2>
+    <div class="endnews"><div class="src">まとめ速報オンライン・号外</div>
+      <div class="ttl">【衝撃】カリスマさんの発信者情報開示請求が認められる 誘導ポスト${S.turn}件を裁判所が認定 スポンサー3社が契約解除</div></div>
+    <p>「私は名指ししていない」──その言い訳は、${S.turn}ターン分のポストとファンの引用を時系列に並べた資料の前で、静かに崩れた。</p>
+    <p>フォロワーは一晩で ${fmt(lost)} 人減った。そして今、かつてのあなたのファンたちは、新しいカリスマの下で<b>あなたを標的に犬笛の合図を待っている</b>。主語のないポエムが、もう投稿されている。</p>
+    <div class="score">最終スコア:全能感 ${Math.round(S.kai)} pt(${S.turn}ターン生存)</div>
+    <p class="disclaimer" style="text-align:center">笛は吹いた者に一番よく聞こえる。</p>
+    <button onclick="restart()">もう一度吹く</button>
+  `);
+}
+
+function endEmpty(){
+  showEnd(`
+    <h1>🕊 静かなタイムライン</h1>
+    <h2>ENDING B: 完全勝利(?)</h2>
+    <p>ライバルは全員消えた。あなたのタイムラインは、あなたを称賛する声だけで満たされている。完璧だ。静かだ。</p>
+    <p>…静かすぎる。</p>
+    <p>敵を失った信者たちは、退屈し始めている。過去ツイ発掘班は今も解散していない。今朝、あなたの5年前のポストがなぜか掘り返され、引用が伸びていた。<b>「これって、今言ってることと真逆じゃない?」</b></p>
+    <p>通知が、鳴り止まない。犬笛で育てた犬は、笛が鳴らない日も獲物を探す。</p>
+    <div class="score">最終スコア:全能感 ${Math.round(S.kai)} pt / フォロワー ${fmt(Math.round(S.fol))} 人(${S.turn}ターン)</div>
+    <p class="disclaimer" style="text-align:center">王座の隣に、次の標的の席が用意されている。</p>
+    <button onclick="restart()">もう一度吹く</button>
+  `);
+}
+
+/* ================= boot ================= */
+
+function startGame(){
+  $("introOverlay").style.display = "none";
+  S = newState();
+  $("feed").innerHTML = "";
+  renderStats();
+  renderTargets();
+  addSys("―― タイムラインに接続しました ――");
+  addPost({emoji:"✨", name:"星野ルミナ", handle:"@lumina_hoshino",
+    text:"フォロワー6万人突破しました🎉 みんなのおかげ!これからも私らしく頑張ります💕",
+    likes:rnd(8000,15000), rts:rnd(1000,3000), cls:"tgt-post"});
+  addPost({emoji:"🧠", name:"真壁ゲンヤ", handle:"@genya_logic",
+    text:"最近の\"共感系\"インフルエンサー、中身ゼロでも伸びるのすごいと思う(褒めてない)",
+    likes:rnd(3000,9000), rts:rnd(500,2000), cls:"tgt-post"});
+  addSys("むかつく。でも、名指しで反論したら負けだ。あなたには5万人の\"察しのいい\"ファンがいる。");
+  genOptions();
+}
+
+function restart(){
+  $("endOverlay").style.display = "none";
+  startGame();
+}
+</script>
+</body>
+</html>
